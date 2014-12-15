@@ -1,11 +1,12 @@
 Revenj
 ======
 
-Revenj is a *lightweight* framework for .NET/Mono with advanced LINQ support for Postgres and Oracle databases. 
-It's ideal to use a REST-like service, but can also be used as a library from other frameworks such as ASP.NET. 
+Revenj is a *lightweight* framework for .NET/Mono with advanced LINQ support for Postgres and Oracle databases.
+It's ideal to use as a REST-like service, but can also be used as a library from other frameworks such as ASP.NET.
 
-DSL Platform will use Invasive software composition to integrate with Revenj, so 
-developers can focus on rich modeling (NoSQL/ER hybrid on top of ORDBMS).
+DSL Platform will use Invasive Software Composition to integrate with Revenj,
+so that developers can focus on rich modeling (NoSQL/ER hybrid on top of ORDBMS).
+
 DSL Platform will take care of various boilerplate and model evolution while Revenj will expose:
 
  * persistence
@@ -48,20 +49,20 @@ Domain is described using various modeling building blocks in a DSL, for example
       }
     }
 
-Which gives you a DTO/POCO/POJO/POPO/POSO... across different languages, 
-tables, types, views, functions specialized for supported ORDBMS, 
+Which gives you a DTO/POCO/POJO/POPO/POSO... across different languages,
+tables, types, views, functions specialized for supported ORDBMS,
 repositories, converters, serialization and various other boilerplate required by the supported frameworks.
 There are also a lot more modeling concepts which go beyond basic persistence features and cover reporting/customization/high performance aspects of the application.
 
-The biggest benefit shows when you start changing your model and DSL compiler gives you not only the new DLL, 
-but also a SQL migration file which tries to preserve data if possible. 
-SQL migration is created by the compiler analyzing differences between models, so you don't need to write manual migration scripts.
+The biggest benefit shows when you start changing your model and DSL compiler gives you not only the new DLL,
+but also an SQL migration file which tries to preserve data if possible.
+SQL migration is created by the compiler by analyzing differences between models, so you don't need to write manual migration scripts.
 
 DSL compiler acts as a developer in your team which does all the boring work you would need to do, while providing high quality and high performance parts of the system.
 
 ##Getting started:
 
-Register at [dsl-platform](https://dsl-platform.com/) so you can use the free online compiler. 
+Register at [DSL Platform](https://dsl-platform.com/register) so you can use the free online compiler.
 You will also need a Postgres instance and a .NET/Mono.
 
 Go through the tutorials:
@@ -81,7 +82,7 @@ Revenj doesn't try to be yet another framework, since it tries to reuse existing
 
 Some of the features/approaches available in the framework or precompiled library and just exposed through the framework:
 
- * advanced LINQ driver - no impedance mismatch between database objects and .NET classes
+ * advanced LINQ driver - no O/R impedance mismatch between database objects and .NET classes
  * event sourcing - capture events in the system. Bulk process events. Replay events to reconstruct aggregate roots
  * notification infrastructure - integrate with SignalR for push notification or invalidate cache to keep data up-to-date
  * plugin based architecture - almost everything is a plugin, from REST commands to LINQ converters
@@ -91,7 +92,7 @@ Some of the features/approaches available in the framework or precompiled librar
  * IOC/DI support - let container inject correct dependencies into your plugins or just provide alternative service implementation
  * permissions/security - inject security directly into DAL or handle it manually when appropriate
  * various serialization support - JSON/XML/Protobuf - others can be easily added
- * fast JSON serialization - let DSL Platform bake serialization directly into the model when JSON library is not fast enough
+ * [fast JSON serialization](https://github.com/ngs-doo/json-benchmark) - let DSL Platform bake serialization directly into the model when JSON library is not fast enough
  * cache infrastructure - various caching features to provide excellent performance
  * WCF compatible REST API running on top of HttpListener
  * transactional mailer - queue mails while in transaction - rely on ACID offered by the databases
@@ -114,7 +115,7 @@ DSL model:
         int version;
         long? uncut;
         ip address;
-        VersionInfo? info;        
+        VersionInfo? info;
       }
       value VersionInfo {
         Map dictionary;
@@ -192,7 +193,7 @@ This means it's enough to write an implementation class and place DLL alongside 
         ...
       }
     }
-    
+
 ####Exposing simple custom REST service:
 
 To add a custom REST service it's enough to implement specialized typesafe signature.
@@ -200,7 +201,7 @@ To add a custom REST service it's enough to implement specialized typesafe signa
     public class MyCustomService : IServerService<int[], List<ComplexObject>> {
       ...
       public MyCustomService(...) { ... }
-      public List<ComplexObject> Execute(int[] arguments) { ... }      
+      public List<ComplexObject> Execute(int[] arguments) { ... }
     }
 
 ####Registering custom access permissions:
@@ -210,7 +211,7 @@ Custom permissions can be registered by hand if they don't really belong to the 
 
     IPermissionManager permissions = ...
     permissions.RegisterFilter<CapturedAction>(it => false, "Admin", false); //return empty results for everybody who are not in Admin role
-    
+
 ##External tools and libraries
 
 DSL can be written in Visual studio with the help of [DDD for DSL](http://visualstudiogallery.msdn.microsoft.com/5b8a140c-5c84-40fc-a551-b255ba7676f4) plugin.
