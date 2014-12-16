@@ -46,7 +46,7 @@ Minimal useful DSL that we can write is:
       aggregate Example;
     }
 
-However, there is some syntax sugar magic going on here. It is almost equivalent to a the desugared version:
+However, there is some syntax sugar magic going on here. It is almost equivalent to the desugared version:
 
     module Tutorial {
       aggregate Example(ID) {
@@ -58,10 +58,10 @@ Module *Tutorial* with [aggregate root](http://dddcommunity.org/resources/ddd_te
   * namespace *Tutorial* with class *Example* in C#
   * schema *Tutorial* with table *Example* in Postgres
 
-Concept *sequence* means that the *ID* field will be an auto-incremented value provided by the database.
+The *sequence* concept indicates that the *ID* field will be an auto-incremented value provided by the database.
 
 To CRUD it we can use the [REST-like API](https://github.com/ngs-doo/revenj/blob/master/Code/Plugins/Revenj.Plugins.Rest.Commands/ICrudCommands.cs) available in a plugin DLL provided with Revenj.  
-Rest plugin is using a WCF signature for defining the endpoint and is available (by default) via `/Crud.svc/Tutorial.Example` url.
+Rest plugin is using a WCF signature for defining the endpoint and is available (by default) via `/Crud.svc/Tutorial.Example` url on port `8999`.
 
 ###Configuring DSL Platform plugin
 
@@ -69,7 +69,7 @@ In Visual Studio, create a new **Class Library** project for .NET 4 or newer:
 
 ![Creating tutorial project](pictures/new-project.png)
 
-Now we can use right click on the solution to pull up the properties and select the **Log in to DSL Platform** option (previously *Convert to DSL Platform solution*).
+Now we can use right click on the solution to pull up the properties and select the **Log in to DSL Platform** option.
 
 ![Adding DSL Platform info to sln file](pictures/convert-solution.png)
 
@@ -94,7 +94,7 @@ Let's take a look at the solution file to see what's going on.
 The Platform-specific section (`DslPlatformSolutionProperties`) is highlighted.
 
 ###Compiling the DSL
-With everything configured, we can write our first DSL. Let's start by adding a new text file named `tutorial.ddd` (or `tutorial.dsl`) and paste in the DSL.  
+With everything configured, we can write our first DSL. Let's start by adding a new text file named `tutorial.dsl` and paste in the DSL.  
 We should have something like this:
 
 ![Compile DSL](pictures/compile-dsl.png)
@@ -128,12 +128,14 @@ The last thing we need to do is to change the Revenj's config file: point it to 
 
 ![Configure app config](pictures/configure-config.png)
 
-*While this is not ideal, since new download can override our configuration, let's use it for now as-is*.  
-Now we can run our project which will start Revenj server using our customized library.
+Now we can run our project, which will start Revenj server using our customized library.
 
 Let's try if it works with [Fiddler](http://www.telerik.com/download/fiddler).
-By default, config has disabled authorization using NoAuth class specified as custom authorization and override for security permissions.
-So we can just point POST to url specified in the config:
+By default, security is disabled (`<add key="CustomAuth" value="Revenj.Http.NoAuth"/>`) in the config file, so we can create a new `Example` by sending a POST request to Revenj:
+
+    URL:          http://localhost:8999/Crud.svc/Tutorial.Example
+    Content Type: application/json
+    Request Body: {}
 
 ![Trying out our REST service](pictures/first-fiddler.png)
 
@@ -169,9 +171,7 @@ While a couple of interesting things happen in the pipeline, we will not discuss
 
 ###Modeling NoSQL documents
 
-Now that we have a working setup and understand the basic processing of the request, let's write a more interesting model, which isn't a standard [ER](http://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model) model.
-
-Let's write our final model for this tutorial:
+Now that we have a working setup and understand the basic processing of the request, let's write a more interesting non-[ER](http://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model) model:
 
     module Tutorial {
       aggregate Example {
@@ -199,47 +199,43 @@ Let's write our final model for this tutorial:
       }
     }
 
-... to show-off various minor and major features which are available with just a few simple descriptions.
+This model shows-off various minor and major features which are available with just a few simple descriptions.
 
-DSL supports various property types, collections, references and basically everything you need to describe a complex domain, while DSL Platform will provide best-practice implementations for such concepts. The DSL described above will result in a model which the developer would usually write in code and a lot of boilerplate hidden away which will be used, such as repositories, conversions from C# objects to Postgres objects, various validations, boilerplate code for serialization and various other libraries, useful methods such as Clone, Equals and many others.
+DSL supports various property types, collections, references and basically everything you need to describe a complex domain, while DSL Platform will provide best-practice implementations for such concepts. The DSL described above will result in a model which would otherwise be manually coded by the developer, along with a lot of boilerplate such as: repositories, conversions from C# objects to Postgres objects, various validations, serialization code, various other libraries, Clone and Equals methods, and many others.
 
-If we add a reference to our lib and take a look how that looks from Visual studio we will see something like:
+If compile the new DSL, and add a project reference to the generated ServerModel lib, we will see something like:
 
 ![.NET model](pictures/model-dll.png)
 
-Repositories and various other services have internal modifier, but are available through Revenj interfaces.
+Repositories and various other services are marked as [*internal*](http://msdn.microsoft.com/en-us/library/7c5ka91b.aspx), but are available through Revenj interfaces.
 So *ExampleList* repository can be resolved as `IQueryableRepository<ExampleList>` or by using `IDataContext` with its `Query<ExampleList>()` method.
-If for some reason custom repository needs to be used, a registration to the container with the new repository will override the default registration.
+If for some reason custom repository needs to be used, it can be registered in the container. This will override the default registration.
 
 It's interesting to take a look at the database to see the model.
 Advanced object-oriented features of Postgres are utilized for some aspects of the model, such as `Set`, `List` and `value object`:
 
 ![Postgres model](pictures/postgres-model.png)
 
-If you look at the database you will find collection of `varchar(10)` named *Tags*, collection of types named *Ideas*, history table matching exact structure and a `persist_Example` function which accepts arrays as arguments and is optimized for bulk processing.
-If necessary, optimized single insert/update function can be created in the database and called from the repository.
-Data access doesn't actually go through the tables, but through the views, so, if required, [DBA](http://en.wikipedia.org/wiki/Database_administrator) can alter objects created by the Platform and report an issue which will then result in a better database object or an additional modeling concept.
-Of course, dropping down to SQL when everything else fails can be done through the DSL.
+If you look at the database you will find a `varchar(10)` collection named *Tags*, collection of types named *Ideas*, history table (matching exact structure of Example table), and a `persist_Example` function which accepts arrays as arguments and is optimized for bulk processing. If necessary, optimized single insert/update function can be created in the database and called from the repository.  
+Tables aren't accessed directly, but through views. If required, [DBA](http://en.wikipedia.org/wiki/Database_administrator) can manually alter objects created by the Platform. Of course, when everything else fails, dropping down to SQL is possible through DSL.
 
 ###Conclusion
 
-So while some [ORMs](http://en.wikipedia.org/wiki/Object-relational_mapping) can support simple NoSQL models, neither is close to supporting advanced NoSQL-like modeling in the database DSL Platform provides and Revenj utilizes.
-Of course, nobody is forcing a developer to use object oriented features, collections and various other non-relational constructs, but since those can provide various optimizations they are often useful.
+While some [ORM](http://en.wikipedia.org/wiki/Object-relational_mapping)s can support simple NoSQL models, none are close to supporting advanced in-database NoSQL-like modelling, as provided by Platform and utilized by Revenj.
+Of course, developers aren't forced to use object oriented features, collections and various other non-relational constructs, but since those can provide various optimizations they are often useful.
 
 Basic premise behind DSL is to have a ubiquitous language not only in the core domain, but everywhere.  
-This greatly improves communication between various developers.
-If they utilize correct domain terminology, this brings application a lot closer to the domain-expert which can now validate model by reading DSL - a formal documentation.
+This greatly improves communication between various developers and if they utilize correct domain terminology, even the domain experts can validate model by reading the DSL - a formal documentation.
 
-Let's look at few examples of the boilerplate validations which were created.  
-Aggregate root has a `Set<string(10)>` field.  
-Since neither the field, nor the content of the field is optional, generated code will check for nulls.  
-Also, since we are using a `string(10)` type, it will guard against tags longer than 10 chars.  
-All those checks improve the quality of our data, but are often cumbersome to write.
+Let's look at few examples of how the Plaform helps with minimizing boilerplate code:
+  * Aggregate root has a `Set<string(10)>` field.
+  * Since neither the field, nor the content of the field are optional, generated code will check for nulls.
+  * Since we are using a `string(10)` type, generated code will guard against tags longer than 10 chars.
+  * All those checks improve the quality of our data, but are often cumbersome to write.
 
 **But what about some advanced features available as a single DSL line, such as the history concept?**
 
-This concept is translated to various objects in the database, snippets of code during persist, casts between representations, specialized services in the code, basically various boilerplate one would need to write/specify to get such a complex feature.
-And it's complex since history objects is also typesafe in the database.
+This concept is translated to various objects in the database, snippets of code during persist, casts between representations, specialized services in the code, basically various boilerplate one would need to write/specify to get such a complex feature. It's further complicated by the fact that history objects are typesafe in the database.
 
 If we just stored the object as JSON or something similar in a field, it would introduce problems down the line when we tried to change the model.
 Goal of the DSL Platform is to help you write code which will not turn into legacy.
