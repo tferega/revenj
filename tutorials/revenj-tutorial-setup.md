@@ -2,22 +2,21 @@
 
 **Revenj** is a framework for .NET and Mono with support for Postgres and Oracle databases.
 While it can be used as any other framework, it's rather small (feature-wise) and it's best used as a backend for [DSL Platform](https://dsl-platform.com).
-This makes it ideal as a [REST service](http://c2.com/cgi/wiki?RestArchitecturalStyle) built on [DSL](http://c2.com/cgi/wiki?DomainSpecificLanguage) models, or within some other framework such as ASP.NET.
+This makes it an ideal [REST service](http://c2.com/cgi/wiki?RestArchitecturalStyle) built against [DSL](http://c2.com/cgi/wiki?DomainSpecificLanguage) models, or within some other framework such as ASP.NET.
 
-- Revenj contains [LINQ](http://msdn.microsoft.com/en-us/library/bb397926.aspx) providers for Postgres and Oracle, somewhat different from other LINQ providers since it leverages object-oriented features of those databases. This allows for having [NoSQL documents](http://en.wikipedia.org/wiki/Document-oriented_database) inside relational databases.
+- Revenj contains [LINQ](http://msdn.microsoft.com/en-us/library/bb397926.aspx) providers for Postgres and Oracle, which are somewhat different from other LINQ providers since they leverage object-oriented features of those databases. This allows storing [NoSQL documents](http://en.wikipedia.org/wiki/Document-oriented_database) inside relational databases.
 - Revenj also supports various serializations out of the box, such as: Json, Protobuf and XML.
 - Inversion of control is used to bind various services together and Autofac (slightly modified) is the default container.
 - Advanced features such as [AOP](http://docs.castleproject.org/Windsor.Introduction-to-AOP-With-Castle.ashx) are supported, which means aspects can be registered to utilize various inspections and fixes, without providing alternative service implementations.
-- Plugin-based architecture allows for easy extensions without code changes or recompilations. Signature based extensions are utilized, so even convention or configuration are not necessary, since services are picked up by their signature, not by their name or explicit wiring.
+- Plugin-based architecture allows for easy extensions without code changes or recompilations. Revenj uses signature based extensions which means that services are picked up by their signature, not by their name or explicit wiring. There is no need for any configuration.
 
-In this tutorial we will use it as a REST service to show off why Revenj/DSL Platform is useful.  
+In this tutorial we will use it as a REST service to show off why Revenj/DSL Platform is useful.
 
-DSL Platform is a DSL compiler which converts the provided DSL model into target code/SQL.  
-It is available for free as an online service, or can be licensed for offline installation.
+DSL Platform is a compiler for DSL files which converts the provided DSL model into target code and SQL. It is available for free as an online service, or can be licensed for offline installation.
 
 ###Getting started
 
-To get started, we'll need a DSL Platform account, Postgres (9.1 or newer), a DDD plugin for Visual Studio and .NET (4.0 or newer)/Mono (3.2 or newer). 
+To get started, we'll need a DSL Platform account, Postgres (9.1 or newer), a DDD plugin for Visual Studio and .NET (4.0 or newer)/Mono (3.2 or newer).
 
 #####DSL Platform account
 Go to the [Platform registration page](https://dsl-platform.com/register), and complete the registration process. We will use this account to manage and compile our DSL files.
@@ -29,16 +28,22 @@ Connection string used in this tutorial (although any values can be used):
     Hostname: localhost
     Port:     5432
     DB Name:  Tutorial
-    Username: user
-    Password: pass
+    Username: revenj
+    Password: revenj
+
+To create the `revenj` user and `Tutorial` database, you can run the following two commands:
+
+    createuser -DIPRSUpostgres revenj
+      Enter password for new role: revenj
+      Enter it again: revenj
+    createdb -Upostgres -Orevenj -Eutf8 -Ttemplate1 Tutorial
 
 #####Visual Studio plugin
-For this tutorial we'll be assuming usage of [DDD for DSL](http://visualstudiogallery.msdn.microsoft.com/5b8a140c-5c84-40fc-a551-b255ba7676f4) Visual studio plugin.  
-Alternatively, same actions could be performed via a [command-line client](https://github.com/ngs-doo/dsl-compiler-client).
+For this tutorial we'll be assuming usage of [DDD for DSL](http://visualstudiogallery.msdn.microsoft.com/5b8a140c-5c84-40fc-a551-b255ba7676f4) Visual studio plugin. Alternatively, same actions could be performed via a [command-line client](https://github.com/ngs-doo/dsl-compiler-client).
 
 ###DSL introduction
 
-In this tutorial, we will be using a minimal DSL as en example, along with a simple [CRUD](http://en.wikipedia.org/wiki/Create,_read,_update_and_delete) operation to get a feeling of what's happening.
+We will start with a minimal DSL as en example, along with a simple [CRUD](http://en.wikipedia.org/wiki/Create,_read,_update_and_delete) operation to get a feeling of what's happening.
 
 Minimal useful DSL that we can write is:
 
@@ -46,7 +51,7 @@ Minimal useful DSL that we can write is:
       aggregate Example;
     }
 
-However, there is some syntax sugar magic going on here. It is almost equivalent to the desugared version:
+However, there is some syntax sugar magic going on here. It is equivalent to the desugared version:
 
     module Tutorial {
       aggregate Example(ID) {
@@ -54,7 +59,7 @@ However, there is some syntax sugar magic going on here. It is almost equivalent
       }
     }
 
-Module *Tutorial* with [aggregate root](http://dddcommunity.org/resources/ddd_terms/) *Example* will be mapped to
+Module *Tutorial* with [aggregate root](http://dddcommunity.org/resources/ddd_terms/) *Example* will be mapped to:
   * namespace *Tutorial* with class *Example* in C#
   * schema *Tutorial* with table *Example* in Postgres
 
@@ -69,15 +74,14 @@ In Visual Studio, create a new **Class Library** project for .NET 4 or newer:
 
 ![Creating tutorial project](pictures/new-project.png)
 
-Now we can use right click on the solution to pull up the properties and select the **Log in to DSL Platform** option.
+Now we can right click on the solution to pull up its properties, and select the **Log in to DSL Platform** option.
 
 ![Adding DSL Platform info to sln file](pictures/convert-solution.png)
 
-Next, we need to download and configure dependencies. 
-Revenj server can be downloaded from [Github](https://github.com/ngs-doo/revenj/releases/latest) or Nuget, but the easiest way is to download it through the plugin configuration window (section *Server library*, button *Full*). 
+Next, we need to download and configure dependencies.  
+Revenj server can be downloaded from [GitHub](https://github.com/ngs-doo/revenj/releases/latest) or NuGet, but the easiest way is to download it through the plugin configuration window (section *Server library*, button *Full*).
 
-Let's also enable *Apply migration* (in configuration window) option so that we don't need to manually run SQL script against the database. 
-In order to see generated SQL scripts, we need to specify a folder for them. Create a folder `sql` inside our solution and type in `sql` in *SQL scripts path*.
+Let's also enable *Apply migration* (in configuration window) option so that we don't need to manually run SQL script against the database. In order to see generated SQL scripts, we need to specify a folder for them. Create a folder `sql` inside our solution and type in `sql` in *SQL scripts path*.
 
 Also, check the *Postgres migration* checkbox in the main plugin window.
 
@@ -87,7 +91,7 @@ Our configuration window should now look something like this:
 
 ![Configuration](pictures/config.png)
 
-Let's take a look at the solution file to see what's going on.
+Let's take a look at the solution file to see what's going on:
 
 ![Unmanaged DSL Platform project](pictures/sln-changes.png)
 
@@ -109,8 +113,7 @@ After confirmation, the database should be upgraded which we can check in [PgAdm
 
 ![DSL difference](pictures/initial-pg-admin.png)
 
-DB script which was used to migrate the database can be found in the folder specified in configuration.
-It should look something like this:
+DB script which was used to migrate the database can be found in the `lib` folder. It should look something like this:
 
 ![DSL difference](pictures/init-sql-script.png)
 
@@ -134,7 +137,8 @@ Let's try if it works with [Fiddler](http://www.telerik.com/download/fiddler).
 By default, security is disabled (`<add key="CustomAuth" value="Revenj.Http.NoAuth"/>`) in the config file, so we can create a new `Example` by sending a POST request to Revenj:
 
     URL:          http://localhost:8999/Crud.svc/Tutorial.Example
-    Content Type: application/json
+    Content-Type: application/json
+    Accept:       application/json
     Request Body: {}
 
 ![Trying out our REST service](pictures/first-fiddler.png)
@@ -142,8 +146,6 @@ By default, security is disabled (`<add key="CustomAuth" value="Revenj.Http.NoAu
 If everything is working, we should get a response from the server:
 
 ![Expected response from REST service](pictures/first-response.png)
-
-Since we didn't specify an `Accept` header, server answered in the default format (in this case with XML).
 
 ###First tour through Revenj
 
@@ -171,7 +173,7 @@ While a couple of interesting things happen in the pipeline, we will not discuss
 
 ###Modeling NoSQL documents
 
-Now that we have a working setup and understand the basic processing of the request, let's write a more interesting non-[ER](http://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model) model:
+Now that we have a working setup and understand the basic processing of the request, let's write a more interesting model (which cannot be expressed as a standard [ERM](http://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model)):
 
     module Tutorial {
       aggregate Example {
@@ -199,11 +201,11 @@ Now that we have a working setup and understand the basic processing of the requ
       }
     }
 
-This model shows-off various minor and major features which are available with just a few simple descriptions.
+This model shows-off various minor and major DSL features. See here for detailed explanation.
 
-DSL supports various property types, collections, references and basically everything you need to describe a complex domain, while DSL Platform will provide best-practice implementations for such concepts. The DSL described above will result in a model which would otherwise be manually coded by the developer, along with a lot of boilerplate such as: repositories, conversions from C# objects to Postgres objects, various validations, serialization code, various other libraries, Clone and Equals methods, and many others.
+DSL supports various property types, collections, references and basically everything you need to describe a complex domain, while DSL Platform will provide best-practice implementations for such concepts. The DSL described above will result in a model which would otherwise have to be manually coded by the developer, along with a lot of boilerplate such as: repositories, conversions from C# objects to Postgres objects, various validations, serialization code, various other libraries, Clone and Equals methods, etc...
 
-If compile the new DSL, and add a project reference to the generated ServerModel lib, we will see something like:
+If compile the new DSL, and add a project reference to the generated `ServerModel.dll` (in the `lib` folder), we will see something like:
 
 ![.NET model](pictures/model-dll.png)
 
