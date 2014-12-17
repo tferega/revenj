@@ -1,8 +1,6 @@
 ## Event sourcing usage in Revenj
 
-[Event sourcing](http://martinfowler.com/eaaDev/EventSourcing.html) is an old concept with basic premise to capture changes to the system, instead of tracking the state of the system. 
-State can be always reconstructed by replaying captured events. 
-Revenj has [support for event sourcing](https://github.com/ngs-doo/revenj/blob/master/Code/Domain/Revenj.DomainPatterns.Interface/DomainEvent.cs) with few signatures and services.
+[Event sourcing](http://martinfowler.com/eaaDev/EventSourcing.html) a concept where, instead of tracking the state of a system, each change is stored as an event. This allows reconstruction of the state by replaying captured events. Revenj has [support for event sourcing](https://github.com/ngs-doo/revenj/blob/master/Code/Domain/Revenj.DomainPatterns.Interface/DomainEvent.cs) with few signatures and services.
 
 ###Events in DSL
 
@@ -23,72 +21,117 @@ Let's write a few events and explore how they can be used in the system.
       }
     }
 
-We'll be using this DSL as a reference model to understand the basics. 
-This model will create three tables in the database, named: *VoteStats*, *Upvote* and *Downvote*. 
-We will also get three .NET classes, one with `IAggregateRoot` signature and two with `IDomainEvent` signatures.
+We'll be using this DSL as a reference model to understand the basics. This model will create three tables in the database, named: *VoteStats*, *Upvote* and *Downvote*. We will also get three .NET classes, one with `IAggregateRoot` signature and two with `IDomainEvent` signatures.
 
-One obvious difference from other event sourcing solutions is that instead of having a single Events table with serialized version of the object, we get a table per [Domain Event](http://martinfowler.com/eaaDev/DomainEvent.html). 
-In this way there is no need for specialized projections, since tables themselves can be used for querying.
+One obvious difference from other event sourcing solutions is that instead of having a single Events table with serialized versions of the object, we get a table per [Domain Event](http://martinfowler.com/eaaDev/DomainEvent.html). 
+This way, there is no need for specialized projections, since tables themselves can be used for querying.
 
 ###Event sourcing basics
 
-Let's reuse previous project to continue Revenj exploration. 
-Instead of previous model let's apply this new one. 
-If we pasted this new model over the old one and started a compile, we will see our first destructive migration:
+Let's reuse previous project to continue Revenj exploration. Overwrite the previous model with this new one, and compile. This will trigger a destructive migration:
 
-![Destructive migration](pictures/destructive-migration.png)
+![Destructive migration](pictures/event-destructive-migration.png)
 
 DSL Platform has created an SQL script which is irreversible, in a sense that it will remove some objects/data. 
 During development this allows for rapid domain exploration, which is supported by typesafe environment in the database. 
 This way developer gets the best of both worlds: type-safety and fast prototyping.
 
-If we take a look at the database:
+Let's take a look at the database:
 
 ![Domain event tables in database](pictures/event-tables-simple.png)
 
-we'll find submit functions for saving events to the database, table per event and a view per event which is used for querying instead of direct table access. 
-**Event sourcing is still undergoing changes and refactoring, so some things currently visible, like additional columns: *event\_id*, *queried\_at* and *processed\_at* might be changed in the future**. 
-But for now, every event gets a long *ID* type which is assigned during database insert. 
+We'll find submit functions for saving events to the database along with a table and a view for each event. Views are used for querying events instead of direct table access.  
+**Event sourcing is still undergoing changes and refactoring, so some things currently visible, like additional columns: *event\_id*, *queried\_at* and *processed\_at* might be changed in the future**.  
+For now, every event gets a long *ID* field which is assigned during database insert. 
 It's interesting to notice a [partial index](http://www.postgresql.org/docs/9.3/static/indexes-partial.html) on *processed\_at* column, which is used to quickly find unprocessed events.
 
-Our `async` concept used in *Upvote* event will result in different processing patterns for those events. 
-By default events are synchronous, which means they are processed by Revenj immediately. 
-Asynchronous events are just stored to the database and will have *processed\_at* field null. 
-Basic idea is for highly concurrent systems to process events in bulk. 
-So we can invoke *Upvote* processor every second, which can gather all (or subset of) unprocessed events, process them and mark them as processed. 
+`async` concept used in *Upvote* event will result in different processing patterns for those events. By default events are synchronous, which means they are processed by Revenj immediately. Asynchronous events are just stored to the database and have *processed_at* field set to *null*. This allows highly concurrent systems to process events in bulk.  
+We can invoke *Upvote* processor every second, which will gather all (or subset of) unprocessed events, process them and mark them as processed. 
 Domain Events can't be changed with the Revenj API, they can only be marked as processed (if they were not).
 
 **So what does processing events even mean in Revenj?**
 
 Except for `IDomainEvent` signature, Revenj also has event store and event handler signatures. 
-They are located in domain patterns project and look something like:
+They are located in domain patterns project and look something like this:
 
 ![Domain Event signatures](pictures/event-store-signature.png)
 
 ###Handling Domain Events in code
 
 Domain Events can be submitted in bulk, which is essential in highly concurrent environments. 
-Event handler is just a type-safe signature with void `Handle(T event)` method.
 
-Developers write plain classes which implement Revenj event handler signatures. 
-It's important to know that Revenj uses [transactions](http://c2.com/cgi/wiki?TransactionProcessing) by default, so in a REST server with multiple handlers per single event, if any of those handlers throw an exception, entire transaction will be rolled back. 
-Of course, developers can utilize other non-transactional services during processing. 
-In case of async event, processors are not called, so exception can't be thrown and event is always stored to the database (as long as it's successfully deserialized, ie. event defined in this model has a limit of 200 chars for *topic*. If that constraint is not satisfied, even async event will not be stored to the database).
+#####Anatomy of an Event Handler
 
-During startup Revenj scans all assemblies for such signatures in `EventProcessorAspects` and registers them into the container. 
-This way, as long as DLL is scanned during plugins initialization, various handlers will be configured, without any configuration, or naming convention.
+Event handler is just a plain class that implements a `IDomainEventHandler<T>` interface, and defines the `void Handle(T event)` method:
 
-But for Revenj to pick up our DLL it needs to be in specified plugins folder, or with other DLLs. 
-So let's just change output path to dependencies/Server folder so it's picked up by during scanning process. 
-We can also change server model path to just ServerModel.dll, since it will be copied along with our custom DLL when we build/start the application.
+    public class WidgetHandler : IDomainEventHandler<Widget>
+    {
+        public void Handle(Widget widgetEvent) 
+        {
+            ...
+        }
+    }
 
-To implement downvote handler, we'll need to reference two assemblies: server model which is compiled locally after each DSL compilation request and domain patterns interface project.
+To handle events, all developers have to do is write classes conforming to this signature.
 
-Our implementation can look something like this:
+#####Transactions
+
+It's important to know that Revenj uses [transactions](http://c2.com/cgi/wiki?TransactionProcessing) by default, so if we have multiple handlers for a single event, and if any of those handlers throws an exception, entire transaction will be rolled back.  
+Of course, developers can utilize other non-transactional services during processing. In case of an *async* event, processors are not called immediately, so exceptions can't be thrown. As long as the event can be successfully serialized, it is always stored to the database. For eaxample, the event defined in this model has a limit of 200 chars for *topic*. If that constraint is not satisfied, not even *async* event will not be stored to the database.
+
+#####Setup
+
+During startup Revenj scans all assemblies for event handler signatures (in [`EventProcessorAspects`](../Code/Domain/Revenj.DomainPatterns/Aspects/EventProcessorAspect.cs)) and registers them into the container. This way, as long as DLL is scanned during plugins initialization, various handlers will be configured without any explicit configuration or naming convention.
+
+Revenj looks for DLLs in its plugins folder (specified in the configuration file, as described in [previous tutorial](revenj-tutorial-setup.md#starting-the-http-server)), so we need to change output path to `dependencies/Server` in order for our DLL to be picked up by during scanning process.
+
+![Output and server model path](pictures/event-output-path.png)
+
+#####Implementation
+
+To implement a downvote handler, we'll need to reference two assemblies: server model (created locally after each DSL compilation) and domain patterns interface project (downloaded with Revenj).
+
+![Adding References](pictures/event-add-references.png)
+
+Let's use the following implementation:
+
+    using EventSourcing;
+    using Revenj.DomainPatterns;
+    
+    namespace RevenjTutorial1
+    {
+        public class DownvoteHandler : IDomainEventHandler<Downvote>
+        {
+            private readonly IDataContext Context;
+    
+            public DownvoteHandler(IDataContext context)
+            {
+                this.Context = context;
+            }
+    
+            public void Handle(Downvote domainEvent)
+            {
+                var vote = Context.Find<VoteStats>(domainEvent.topic);
+                vote.downvotes++;
+                Context.Update(vote);
+            }
+        }
+    }
 
 ![Domain Event handler implementation](pictures/event-handler-implementation.png)
 
-Since Revenj has registered our class to the container, we can resolve various services in the constructor (actually for this to work, we didn't need to register it to the container, but for simplicity sake, let's skip that discussion for now).
+Since Revenj has registered our class to the container, we can resolve various services in the constructor (`IDataContext` in this case).
+
+#####Trying it out
+
+Let's send a `Downvote` event:
+
+    URL: http://localhost:8999/Domain.svc/submit/EventSourcing.Downvote?result=instance
+    Content-Type: application/json
+    Accept: application/json
+    Body: {"topic": "A new topic!"}
+    
+![Domain Event handler implementation](pictures/event-simple-fiddler.png)
 
 ###Events and transactions
 
@@ -99,19 +142,15 @@ In the provided example a naive implementation of downvotes explains how to load
 Some features are enabled by default, which will help with the processing of such a code. 
 For example, *VoteStats* has [change tracking](https://github.com/ngs-doo/revenj/blob/master/Code/Domain/Revenj.DomainPatterns.Interface/Tracking.cs) enabled on it, so `Context.Update` will use that information to avoid another database lookup during save.
 
-We can of course disable change tracking, which is useful in mostly read scenarios and then we could either create our own clone of the vote, just after we've loaded it from the database, or let repository do another query to fetch the current version of it.
+Change tracking can be disbled, which is useful in mostly-read scenarios. In that case, we can either create our own clone of the vote just after we've loaded it from the database, or let repository do another query to fetch the current version of it.
 
-Unfortunately our simplistic example suffers from concurrency issues, which we could guard with a lock. 
-While this would work on a single server, it would fail in distributed environment. 
-To work around such issues we can use locking features of the DSL Platform, in this case we could add optimistic concurrency to the VoteState, which would help with the detection of concurrent events.
+Unfortunately our simplistic example suffers from concurrency issues, which we could guard against with a lock. While this would work on a single server, it would fail in distributed environment. To work around such issues we can use locking features of the DSL Platform. In this case we could add optimistic concurrency to the VoteState, which would help with the detection of concurrent events.
 
-Alternative aproach to event handling is reactive processing in bulk mode. 
-This can be done by writing a service which binds to Notifications and reacts on it. 
-A simple implementation of it would look like:
+Alternative aproach to event handling is reactive processing in bulk mode. This can be done by writing a service which binds to Notifications and reacts on it. A simple implementation of it would look like:
 
-![Bulk processing of Domain Events](pictures/reactive-bulk-processing.png)
+![Bulk processing of Domain Events](pictures/event-reactive-bulk-processing.png)
 
-It leveredges [Reactive extensions](http://msdn.microsoft.com/en-us/data/gg577609.aspx) to use Buffer on a stream, [Listen/Notify](http://www.postgresql.org/docs/9.3/static/sql-notify.html) from Postgres available through the `Track` method on `IDataContext`. 
+It leverages [Reactive extensions](http://msdn.microsoft.com/en-us/data/gg577609.aspx) to use Buffer on a stream, [Listen/Notify](http://www.postgresql.org/docs/9.3/static/sql-notify.html) from Postgres available through the `Track` method on `IDataContext`. 
 Also, since `Mark` method is not available in the `IDataContext` (no special reason, except to keep it smallish), we need to resolve event store to mark events as processed.
 
 Still, there are two more issues with the above code, for example, if *Upvote* monitor service is down, we will not get notifications, so in this case those votes will never be processed. 
